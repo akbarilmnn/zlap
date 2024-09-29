@@ -1,65 +1,83 @@
 const std = @import("std");
 const expect = std.testing.expect;
-const CliParser = @import("cli_parser.zig").CliParser;
+const eql = std.mem.eql;
+const Iter = @import("iter.zig").FlagIterator;
 
-test "basic test" {
-    _ = CliParser.init_with_args(&.{ "hello", "world" });
+test "initialize Iter using init_with_args" {
+    const it = Iter.init_with_args(&.{ "hello", "world" });
+    _ = it;
     try expect(true);
 }
 
-test "another basic test" {
-    std.debug.print("another basic test\n", .{});
+test "initialize Iter using init" {
     const allocator = std.testing.allocator;
-    var clip = CliParser.init(allocator);
-    defer clip.deinit();
-    std.debug.print("\n", .{});
+    var it = Iter.init(allocator);
+    defer it.deinit();
     try expect(true);
 }
 
 test "parse long options" {
-    std.debug.print("parse long options\n", .{});
-    var clip = CliParser.init_with_args(&.{ "prigram", "--boot", "grub", "--start", "10" });
-    try clip.parse();
-    std.debug.print("\n", .{});
-    try expect(true);
+    var iter = Iter.init_with_args(&.{ "program", "--boot", "grub", "--start", "10" });
+    const pair = iter.next().?;
+    try expect(eql(u8, pair.flag, "boot"));
+    try expect(eql(u8, pair.value.?, "grub"));
+    const another_pair = iter.next().?;
+    try expect(eql(u8, another_pair.flag, "start"));
+    try expect(eql(u8, another_pair.value.?, "10"));
 }
 
 test "parse trailing long options" {
-    std.debug.print("parse trailing long options\n", .{});
-    var clip = CliParser.init_with_args(&.{ "program", "--foo", "10", "--exec" });
-    try clip.parse();
-    std.debug.print("\n", .{});
-    try expect(true);
+    var iter = Iter.init_with_args(&.{ "program", "--foo", "10", "--exec" });
+    const pair = iter.next().?;
+    try expect(eql(u8, pair.flag, "foo"));
+    try expect(eql(u8, pair.value.?, "10"));
+    const another_pair = iter.next().?;
+    try expect(eql(u8, another_pair.flag, "exec"));
+    try expect(another_pair.value == null);
 }
 
 test "parse short options" {
-    std.debug.print("parse short options\n", .{});
-    var clip = CliParser.init_with_args(&.{ "program", "-l", "-t", "-a", "10" });
-    try clip.parse();
-    std.debug.print("\n", .{});
-    try expect(true);
+    var iter = Iter.init_with_args(&.{ "program", "-l", "-t", "-a" });
+    const pair = iter.next().?;
+    try expect(eql(u8, pair.flag, "l"));
+    const another_pair = iter.next().?;
+    try expect(eql(u8, another_pair.flag, "t"));
+    const yet_another = iter.next().?;
+    try expect(eql(u8, yet_another.flag, "a"));
 }
 
-test "parse trailing short options" {
-    std.debug.print("parse trailing short options\n", .{});
-    var clip = CliParser.init_with_args(&.{ "program", "-l", "-t", "-a" });
-    try clip.parse();
-    std.debug.print("\n", .{});
-    try expect(true);
+test "parse combined trailing short options" {
+    var iter = Iter.init_with_args(&.{ "program", "-lta" });
+    const pair = iter.next().?;
+    try expect(eql(u8, pair.flag, "l"));
+    const another_pair = iter.next().?;
+    try expect(eql(u8, another_pair.flag, "t"));
+    const yet_another = iter.next().?;
+    try expect(eql(u8, yet_another.flag, "a"));
 }
 
-test "parse combined short options" {
-    std.debug.print("parse combined short options\n", .{});
-    var clip = CliParser.init_with_args(&.{ "program", "-lta" });
-    try clip.parse();
-    std.debug.print("\n", .{});
-    try expect(true);
+test "parse trailing short options with value at the end" {
+    var iter = Iter.init_with_args(&.{ "program", "-lta", "10", "-bcd", "20" });
+    const l = iter.next().?;
+    try expect(eql(u8, l.flag, "l"));
+    const t = iter.next().?;
+    try expect(eql(u8, t.flag, "t"));
+    const a = iter.next().?;
+    try expect(eql(u8, a.flag, "a"));
+    try expect(eql(u8, a.value.?, "10"));
+
+    const b = iter.next().?;
+    try expect(eql(u8, b.flag, "b"));
+    const c = iter.next().?;
+    try expect(eql(u8, c.flag, "c"));
+    const d = iter.next().?;
+    try expect(eql(u8, d.flag, "d"));
+    try expect(eql(u8, d.value.?, "20"));
 }
 
-test "parse combined short options with value at the last option" {
-    std.debug.print("parse combined short options with value at the last option\n", .{});
-    var clip = CliParser.init_with_args(&.{ "program", "-lta", "10" });
-    try clip.parse();
-    std.debug.print("\n", .{});
-    try expect(true);
+test "print flags" {
+    var it = Iter.init_with_args(&.{ "--foo", "bar", "--bah", "baz", "--bang", "--dung", "-a", "-c", "-lama", "yoo" });
+    while (it.next()) |a| {
+        std.debug.print("key: {s} and value: {?s}\n", .{ a.flag, a.value });
+    }
 }
